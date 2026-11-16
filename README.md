@@ -1,9 +1,6 @@
 # Wireframe 3D rendering app
 
 Projekt do PGRF1 - transformace a zobrazení drátového modelu 3D scény.
-- Začínáme v Model space 
-- vynásobené modelovací maticí to přeneseme do World space
-
 
 ## Co je potřeba
 
