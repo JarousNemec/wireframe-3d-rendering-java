@@ -1,0 +1,20 @@
+﻿1. Reprezentace tělesa (solid) - vertex buffer, index buffer
+    - Jsme v Model space/Object space/SS tělesa
+2. Násobit vrcholy solidu modelovací transformací (Model matice) - M
+3. Dostávám se do soustavy souřadnic scény/World space
+    - umístil jsem krychli do scény (při tom jsem ji mohl posunout, otočit apod.)
+4. Umístění pozorovatele (kamera) - pozice, směr kam se dívám, up vektor
+    - vytvoříme instaci kamery
+5. Násobit vrcholy všech solidů ve scéně View maticí - V
+    - dostáváme se do soustavy souřadnic pozorovatele - view space
+6. Projekce - Násobit vrcholy všech solidů ve scéně projekční maticí (perspektivní/ortogonální) - P
+7. Jsem v clip space - ořezání
+8. Dehomogenizace - NDC
+9. Transformace do okna obrazovky
+10. Rasterizace
+
+
+Jak je to s těmi soustavy souřadnic:
+1. z model space jdu do world space (model matice) - M
+2. z world space jdu do view space (view matice) - V
+3. z view space jdu do clip space (projection matice) - P

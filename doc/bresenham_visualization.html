@@ -1,0 +1,778 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Bresenhamův algoritmus</title>
+    <style>
+        body { font-family: sans-serif; background: #f0f2f5; margin: 0; padding: 20px; color: #222; }
+        .container { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); max-width: 1240px; margin: 0 auto 20px; }
+        h2 { margin: 0 0 4px; text-align: center; }
+        .subtitle { text-align: center; color: #666; font-size: 14px; margin-bottom: 14px; }
+        .controls { display: flex; gap: 10px; justify-content: center; align-items: center; margin-bottom: 10px; font-size: 14px; flex-wrap: wrap; }
+        .controls button { padding: 4px 12px; cursor: pointer; }
+        .controls input[type=number] { width: 46px; }
+        .legend { display: flex; gap: 15px; justify-content: center; margin-bottom: 10px; font-size: 13px; flex-wrap: wrap; }
+        .legend-item { display: flex; align-items: center; gap: 5px; }
+        .swatch { width: 12px; height: 12px; display: inline-block; }
+        .layout { display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap; justify-content: center; }
+        .left { flex: 0 0 auto; }
+        .right { flex: 1 1 380px; min-width: 320px; display: flex; flex-direction: column; gap: 12px; }
+        canvas { border: 2px solid #ccc; background: #fafafa; border-radius: 4px; display: block; cursor: crosshair; max-width: 100%; }
+        .hint { font-size: 12px; color: #777; margin-top: 4px; }
+        .panel { border: 1px solid #e3e3e3; border-radius: 8px; padding: 10px 12px; }
+        .panel h3 { margin: 0 0 8px; font-size: 14px; color: #555; text-transform: uppercase; letter-spacing: .04em; }
+        .mode { font-size: 13px; padding: 6px 8px; border-radius: 6px; margin-bottom: 8px; }
+        .mode.lecture { background: #e8f5e9; color: #2e7d32; }
+        .mode.general { background: #fff3e0; color: #e65100; }
+        pre.code { margin: 0; font-family: Consolas, monospace; font-size: 13px; line-height: 1.55; }
+        pre.code .ln { display: block; padding: 0 6px; border-radius: 3px; }
+        pre.code .ln .no { color: #aaa; display: inline-block; width: 22px; user-select: none; }
+        pre.code .ln.active { background: #fff59d; font-weight: bold; }
+        pre.code mark.chg { background: #ffe0b2; color: #bf360c; border-radius: 2px; padding: 0 1px; }
+        .vars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; font-family: Consolas, monospace; font-size: 13px; }
+        .var { background: #f6f7f9; border-radius: 5px; padding: 4px 8px; display: flex; justify-content: space-between; transition: background .3s; }
+        .var b { color: #555; font-weight: normal; }
+        .var.changed { background: #fff59d; }
+        #explain { font-size: 14px; line-height: 1.55; min-height: 150px; }
+        #explain p { margin: 0 0 8px; }
+        .stay { color: #1e88e5; font-weight: bold; }
+        .diag { color: #ef6c00; font-weight: bold; }
+        .pill { font-family: Consolas, monospace; background: #f1f1f1; padding: 0 4px; border-radius: 3px; }
+        .stepinfo { font-size: 13px; color: #666; text-align: center; margin-top: 6px; }
+        table.hist { border-collapse: collapse; width: 100%; font-family: Consolas, monospace; font-size: 12.5px; }
+        table.hist th, table.hist td { border-bottom: 1px solid #eee; padding: 3px 6px; text-align: right; }
+        table.hist th { color: #777; font-weight: normal; }
+        table.hist tr.cur td { background: #fff59d; }
+        table.hist tbody tr { cursor: pointer; }
+        table.hist tbody tr:hover td { background: #f3f6ff; }
+        .histwrap { max-height: 260px; overflow-y: auto; }
+        .theory { font-size: 15px; line-height: 1.6; }
+        .theory h3 { margin-top: 22px; border-bottom: 1px solid #eee; padding-bottom: 4px; }
+        .theory code, .theory .f { font-family: Consolas, monospace; background: #f4f4f4; padding: 1px 4px; border-radius: 3px; }
+        .theory .formula { font-family: Consolas, monospace; background: #f7f9fc; border-left: 3px solid #1e88e5; padding: 8px 12px; margin: 8px 0; white-space: pre; overflow-x: auto; }
+        .theory table { border-collapse: collapse; margin: 8px 0; }
+        .theory table td, .theory table th { border: 1px solid #ddd; padding: 4px 10px; text-align: left; }
+        .note { background: #fffde7; border-left: 3px solid #fbc02d; padding: 8px 12px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Bresenhamův algoritmus – rasterizace úsečky (krok za krokem)</h2>
+    <div class="subtitle">Táhni body <b>A</b> a <b>B</b> myší (klik = přesune B, Shift+klik = přesune A). Souřadnice jako v <code>Raster</code>: y roste <b>dolů</b>.</div>
+
+    <div class="controls">
+        <button id="btnRestart" title="Home">⏮ Restart</button>
+        <button id="btnBack" title="←">◀ Zpět</button>
+        <button id="btnStep" title="→">Krok ▶</button>
+        <button id="btnPixel" title="Enter">Další pixel ⏭</button>
+        <button id="btnPlay" title="Mezerník">▶ Přehrát</button>
+        <label>Rychlost: <input type="range" id="speed" min="1" max="20" value="4"> <span id="speedValue">4</span> kroků/s</label>
+    </div>
+    <div class="controls">
+        <label>A = [<input type="number" id="ax">, <input type="number" id="ay">]</label>
+        <label>B = [<input type="number" id="bx">, <input type="number" id="by">]</label>
+        <label>Příklady:
+            <select id="preset">
+                <option value="">— vyber —</option>
+                <option value="2,3,20,11">1. oktant (jako na přednášce)</option>
+                <option value="3,4,19,12">Remíza p = 0 (úsečka přesně středem)</option>
+                <option value="2,9,21,9">Vodorovná úsečka (dy = 0)</option>
+                <option value="2,1,16,15">Úhlopříčka 45° (dy = dx)</option>
+                <option value="7,1,13,14">Strmá (|dy| > |dx|) → zobecnění</option>
+                <option value="21,13,3,5">Doleva nahoru → zobecnění</option>
+            </select>
+        </label>
+    </div>
+
+    <div class="legend">
+        <div class="legend-item"><div class="swatch" style="background:#66bb6a"></div> vykreslený pixel</div>
+        <div class="legend-item"><div class="swatch" style="background:#2e7d32"></div> právě vykreslený</div>
+        <div class="legend-item"><div class="swatch" style="border:2px dashed #1e88e5"></div> kandidát „zůstat“</div>
+        <div class="legend-item"><div class="swatch" style="border:2px dashed #ef6c00"></div> kandidát „diagonálně“</div>
+        <div class="legend-item"><span style="color:#222;font-weight:bold">●</span> M = střed mezi kandidáty</div>
+        <div class="legend-item"><span style="color:#d32f2f;font-weight:bold">●</span> T = kde jde skutečná úsečka</div>
+    </div>
+
+    <div class="layout">
+        <div class="left">
+            <canvas id="canvas"></canvas>
+            <div class="stepinfo" id="stepinfo"></div>
+            <div class="panel" style="margin-top:10px; max-width: 744px;">
+                <h3>Co se právě děje a proč</h3>
+                <div id="explain"></div>
+            </div>
+        </div>
+        <div class="right">
+            <div class="panel">
+                <h3>Pseudokód</h3>
+                <div id="mode" class="mode"></div>
+                <pre class="code" id="code"></pre>
+            </div>
+            <div class="panel">
+                <h3>Proměnné</h3>
+                <div class="vars" id="vars"></div>
+            </div>
+            <div class="panel">
+                <h3>Historie kroků</h3>
+                <div class="histwrap">
+                    <table class="hist">
+                        <thead><tr><th>krok</th><th>p před</th><th>rozhodnutí</th><th>p po</th><th>pixel</th></tr></thead>
+                        <tbody id="hist"></tbody>
+                    </table>
+                </div>
+                <div class="hint">Klikni na řádek pro skok na daný pixel.</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container theory">
+    <h2>Proč a jak to funguje</h2>
+
+    <h3>1. Problém</h3>
+    <p>Úsečka je spojitá, ale rastr je mřížka celých pixelů. Musíme vybrat pixely, které leží „co nejblíž“ skutečné úsečce.
+       Nejjednodušší řešení je to, co dělá <code>LineRasterizerTrivial</code>: spočítat <code>k = dy/dx</code>, <code>q = y1 − k·x1</code>
+       a pro každé <code>x</code> nastavit <code>y = round(k·x + q)</code>.</p>
+    <p>Funguje to, ale v každém kroku je potřeba <b>násobení v plovoucí čárce</b> a <b>zaokrouhlení</b>, navíc se může hromadit
+       zaokrouhlovací chyba floatu. Bresenham (1962, plotter IBM) dává <b>stejný výsledek</b> pouze pomocí <b>celočíselného sčítání a porovnání s nulou</b>.</p>
+
+    <h3>2. Klíčové pozorování (1. oktant: 0 ≤ dy ≤ dx)</h3>
+    <p>Pokud je úsečka „spíš vodorovná“ (sklon 0 ≤ k ≤ 1), pak když se posuneme o jeden pixel v x, posune se skutečné y o k ≤ 1.
+       Další pixel tedy může být jen jeden ze <b>dvou kandidátů</b>:</p>
+    <ul>
+        <li><span class="stay">[x+1, y]</span> – zůstat ve stejném řádku,</li>
+        <li><span class="diag">[x+1, y+1]</span> – posunout se diagonálně.</li>
+    </ul>
+    <p>Mezi nimi leží <b>střed M = [x+1, y+½]</b>. Stačí zjistit, jestli skutečná úsečka v tomto sloupci (bod T) prochází <b>před</b>, nebo <b>za</b> středem M.
+       Tím se celé kreslení redukuje na otázku „ano/ne“ v každém kroku.</p>
+
+    <h3>3. Odvození rozhodovací proměnné p</h3>
+    <p>Úsečku zapíšeme implicitně – funkce F je nulová přesně na úsečce:</p>
+    <div class="formula">F(x, y) = dy·x − dx·y + c          (F = 0 na úsečce)</div>
+    <p>Dosadíme střed M. Když T leží v řádku <code>y<sub>T</sub></code>, vyjde <code>F(M) = dx·(y<sub>T</sub> − y − ½)</code>, takže:</p>
+    <div class="formula">F(M) &lt; 0   ⇔   y_T &lt; y + ½   ⇔   úsečka je blíž k [x+1, y]     → zůstat
+F(M) ≥ 0   ⇔   y_T ≥ y + ½   ⇔   úsečka je blíž k [x+1, y+1]   → diagonálně</div>
+    <p>Kvůli zlomku ½ vynásobíme vše dvěma (znaménko se nezmění) a definujeme <b>p = 2·F(M)</b>. Všechno je teď celočíselné.</p>
+    <p><b>Počáteční hodnota.</b> Bod [x1, y1] leží na úsečce, tj. F(x1, y1) = 0. První střed je M = [x1+1, y1+½]:</p>
+    <div class="formula">p₀ = 2·F(x1+1, y1+½) = 2·(F(x1,y1) + dy − dx/2) = 2·dy − dx</div>
+    <p><b>Inkrementální aktualizace.</b> Nemusíme F počítat znovu – stačí vědět, o kolik se změní, když se střed M posune:</p>
+    <table>
+        <tr><th>rozhodnutí</th><th>M se posune o</th><th>změna F</th><th>změna p</th></tr>
+        <tr><td class="stay">zůstat (p &lt; 0)</td><td>[+1, 0]</td><td>+dy</td><td><code>d1 = 2·dy</code></td></tr>
+        <tr><td class="diag">diagonálně (p ≥ 0)</td><td>[+1, +1]</td><td>+dy − dx</td><td><code>d2 = 2·(dy − dx)</code></td></tr>
+    </table>
+    <p>Odtud přesně pseudokód z přednášky: d1 a d2 se spočítají jednou předem a ve smyčce se jen přičítají.</p>
+
+    <h3>4. Intuice: p je „zvětšená chyba“</h3>
+    <p>Hodnota <code>e = p / (2·dx)</code> je přímo vzdálenost (v pixelech) bodu T od středu M. Ve vizualizaci ji vidíš jako červenou/modrou čárku mezi M a T.</p>
+    <ul>
+        <li>Krok o 1 v x → úsečka stoupne o <code>k = dy/dx</code> → e vzroste o k → p vzroste o <code>2·dx·k = 2·dy</code>.</li>
+        <li>Když se posuneme i v y, referenční řádek se posune o celý pixel → e klesne o 1 → p klesne o <code>2·dx</code>.</li>
+    </ul>
+    <p>Proto je d2 = 2·dy − 2·dx. Násobení 2·dx je jen trik, jak z desetinné chyby e udělat celé číslo.</p>
+
+    <h3>5. Zobecnění na všech 8 oktantů</h3>
+    <p>Pseudokód z přednášky funguje jen pro <b>x1 ≤ x2</b> a <b>0 ≤ dy ≤ dx</b>. Pro ostatní případy (zkus je v příkladech nahoře – v pseudokódu se zvýrazní změny):</p>
+    <table>
+        <tr><th>situace</th><th>úprava</th></tr>
+        <tr><td>úsečka jde doleva (x2 &lt; x1)</td><td>prohodit body A ↔ B, <b>nebo</b> krokovat <code>x = x + sx</code>, kde <code>sx = −1</code></td></tr>
+        <tr><td>úsečka jde nahoru (y2 &lt; y1)</td><td><code>y = y + sy</code>, kde <code>sy = −1</code> (dx, dy počítat jako absolutní hodnoty)</td></tr>
+        <tr><td>strmá úsečka (|dy| &gt; |dx|)</td><td>prohodit role os: hlavní osou je <b>y</b> (krok v každé iteraci), x se jen občas posune; ve vzorcích se prohodí dx ↔ dy</td></tr>
+    </table>
+    <p><b>Hlavní osa</b> = ta, po které se posouváme v každém kroku (delší průmět úsečky). Algoritmus vykreslí vždy přesně <code>max(|dx|, |dy|) + 1</code> pixelů – jeden pro každou hodnotu hlavní osy. Díky tomu nemá úsečka díry (u strmé úsečky by „krok po x“ nechal mezery – to je ten samý důvod, proč má i triviální algoritmus dvě větve).</p>
+
+    <h3>6. Tipy k implementaci</h3>
+    <ul>
+        <li><b>Remíza p = 0</b> (úsečka přesně středem M): podmínka <code>p &lt; 0</code> pošle remízu do diagonály. Pozor – když úsečku kreslíš z A do B a pak z B do A s prohozením bodů, může se v remízách lišit o pixel. U polygonů a drátových modelů to obvykle nevadí, ale je dobré o tom vědět.</li>
+        <li><b>Degenerované případy:</b> A = B (jeden pixel), vodorovná (dy = 0 → vždy p &lt; 0), svislá (dx = 0 → strmá větev), úhlopříčka (dx = dy → p₀ = dy ≥ 0, d2 = 0 → vždy diagonálně). Vyzkoušej si je v příkladech.</li>
+        <li>Mimo rastr: buď ořezávat úsečku předem, nebo kontrolovat <code>isPointInRaster(x, y)</code> před <code>setPixel</code>.</li>
+        <li>Pro kontrolu můžeš výstup porovnat s <code>LineRasterizerTrivial</code> – mimo remízy musí dávat stejné pixely.</li>
+    </ul>
+</div>
+
+<script>
+    // =====================================================================
+    // ===== CONFIG ========================================================
+    // =====================================================================
+
+    const GRID_W = 24;      // number of "pixels" horizontally
+    const GRID_H = 16;      // number of "pixels" vertically
+    const CELL = 30;        // size of one "pixel" on screen
+    const MARGIN = 24;      // space for axis labels
+
+    let A = {x: 2, y: 3};
+    let B = {x: 20, y: 11};
+
+    // =====================================================================
+    // ===== PSEUDOCODE ====================================================
+    // =====================================================================
+    // Line indices (0..12) are shared by all three variants, so every step
+    // can just say "highlight lines [6, 7]" no matter which variant is shown.
+
+    const c = s => `<mark class="chg">${s}</mark>`;   // marks a change vs. the lecture code
+
+    const CODE_LECTURE = [
+        'bresenham(x1, y1, x2, y2) {',
+        '  dx = x2 – x1; dy = y2 – y1;',
+        '  x = x1, y = y1;',
+        '  p = 2 * dy – dx;',
+        '  d1 = 2 * dy; d2 = 2 * (dy - dx);',
+        '  setPixel(x, y);',
+        '  while (x &lt; x2) {',
+        '    x = x + 1;',
+        '    if (p &lt; 0) { p = p + d1; }',
+        '    else { p = p + d2; y = y + 1; }',
+        '    setPixel(x, y);',
+        '  }',
+        '}'
+    ];
+
+    // Flat line (|dy| <= |dx|) in any direction
+    const CODE_FLAT = [
+        'bresenham(x1, y1, x2, y2) {',
+        `  dx = ${c('|x2 – x1|')}; dy = ${c('|y2 – y1|')};`,
+        `  x = x1, y = y1; ${c('sx = sign(x2–x1); sy = sign(y2–y1);')}`,
+        '  p = 2 * dy – dx;',
+        '  d1 = 2 * dy; d2 = 2 * (dy - dx);',
+        '  setPixel(x, y);',
+        `  while (x ${c('!=')} x2) {`,
+        `    x = x + ${c('sx')};`,
+        '    if (p &lt; 0) { p = p + d1; }',
+        `    else { p = p + d2; y = y + ${c('sy')}; }`,
+        '    setPixel(x, y);',
+        '  }',
+        '}'
+    ];
+
+    // Steep line (|dy| > |dx|): roles of x and y are swapped
+    const CODE_STEEP = [
+        'bresenham(x1, y1, x2, y2) {',
+        `  dx = ${c('|x2 – x1|')}; dy = ${c('|y2 – y1|')};`,
+        `  x = x1, y = y1; ${c('sx = sign(x2–x1); sy = sign(y2–y1);')}`,
+        `  p = 2 * ${c('dx')} – ${c('dy')};`,
+        `  d1 = 2 * ${c('dx')}; d2 = 2 * (${c('dx - dy')});`,
+        '  setPixel(x, y);',
+        `  while (${c('y != y2')}) {`,
+        `    ${c('y = y + sy')};`,
+        '    if (p &lt; 0) { p = p + d1; }',
+        `    else { p = p + d2; ${c('x = x + sx')}; }`,
+        '    setPixel(x, y);',
+        '  }',
+        '}'
+    ];
+
+    // =====================================================================
+    // ===== STEP GENERATOR ================================================
+    // =====================================================================
+    // The algorithm is run once in advance and every step is recorded.
+    // Internally it works with a MAJOR axis (moves every iteration) and a
+    // MINOR axis (moves only sometimes). For the 1st octant major = x, minor = y,
+    // which is exactly the lecture pseudocode.
+    //
+    // Step types:
+    //   "init"    - dx, dy, p, d1, d2 computed       (lines 1-4)
+    //   "plot"    - setPixel                          (line 5 or 10)
+    //   "advance" - step on the major axis            (lines 6-7)
+    //   "decide"  - p tested, maybe step on minor     (line 8 or 9)
+    //   "done"    - while condition false             (lines 6, 12)
+
+    let run = null;
+
+    function generateSteps(A, B) {
+        const adx = Math.abs(B.x - A.x), ady = Math.abs(B.y - A.y);
+        const sx = Math.sign(B.x - A.x), sy = Math.sign(B.y - A.y);
+        const steep = ady > adx;
+        const general = steep || sx < 0 || sy < 0;
+
+        const dMaj = steep ? ady : adx, dMin = steep ? adx : ady;
+        const sMaj = steep ? sy : sx, sMin = steep ? sx : sy;
+        const sMinDraw = sMin || 1;           // for drawing candidates when dMin = 0
+        const d1 = 2 * dMin, d2 = 2 * (dMin - dMaj);
+        const xy = (maj, min) => steep ? {x: min, y: maj} : {x: maj, y: min};
+
+        const majA = steep ? A.y : A.x, minA = steep ? A.x : A.y;
+        let maj = majA, min = minA;
+        let p = 2 * dMin - dMaj;
+
+        const info = {adx, ady, sx, sy, steep, general, dMaj, dMin, sMaj, sMin, d1, d2,
+                      dx: general ? adx : B.x - A.x, dy: general ? ady : B.y - A.y,
+                      majName: steep ? 'y' : 'x', minName: steep ? 'x' : 'y',
+                      nMaj: steep ? 'dy' : 'dx', nMin: steep ? 'dx' : 'dy'};
+        const steps = [];
+        const pixels = [];
+        const hist = [];
+
+        steps.push({type: 'init', lines: [1, 2, 3, 4], p, pos: xy(maj, min), k: 0, n: 0});
+
+        pixels.push(xy(maj, min));
+        hist.push({k: 0, pixel: xy(maj, min), pBefore: null, p, choice: 'start'});
+        steps.push({type: 'plot', lines: [5], p, pos: xy(maj, min), k: 0, n: 1});
+
+        for (let k = 1; k <= dMaj; k++) {
+            const prevMin = min;
+            maj += sMaj;
+
+            const cand = {stay: xy(maj, prevMin), diag: xy(maj, prevMin + sMinDraw)};
+            const M = xy(maj, prevMin + sMinDraw * 0.5);                 // midpoint between candidates
+            const T = xy(maj, minA + sMinDraw * dMin * k / (dMaj || 1)); // where the real line goes
+            const geo = {cand, M, T};
+
+            steps.push({type: 'advance', lines: [6, 7], p, pos: xy(maj, min), k, n: pixels.length, geo});
+
+            const pBefore = p;
+            const diag = p >= 0;
+            if (!diag) {
+                p += d1;
+            } else {
+                p += d2;
+                min += sMin;
+            }
+            steps.push({type: 'decide', lines: [diag ? 9 : 8], pBefore, p, diag, pos: xy(maj, min), k, n: pixels.length, geo});
+
+            pixels.push(xy(maj, min));
+            hist.push({k, pixel: xy(maj, min), pBefore, p, choice: diag ? 'diag' : 'stay'});
+            steps.push({type: 'plot', lines: [10], p, pos: xy(maj, min), k, n: pixels.length, last: k === dMaj, geo});
+        }
+
+        steps.push({type: 'done', lines: [6, 12], p, pos: xy(maj, min), k: dMaj, n: pixels.length});
+        return {info, steps, pixels, hist};
+    }
+
+    // =====================================================================
+    // ===== DRAWING =======================================================
+    // =====================================================================
+
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = MARGIN + GRID_W * CELL + 2;
+    canvas.height = MARGIN + GRID_H * CELL + 2;
+
+    const px = x => MARGIN + x * CELL;          // grid -> canvas (cell corner)
+    const cx = x => MARGIN + (x + 0.5) * CELL;  // grid -> canvas (cell center)
+
+    function cellRect(p) { return [px(p.x), MARGIN + p.y * CELL]; }
+
+    function drawGrid() {
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let x = 0; x <= GRID_W; x++) {
+            ctx.moveTo(px(x) + 0.5, MARGIN);
+            ctx.lineTo(px(x) + 0.5, MARGIN + GRID_H * CELL);
+        }
+        for (let y = 0; y <= GRID_H; y++) {
+            ctx.moveTo(MARGIN, MARGIN + y * CELL + 0.5);
+            ctx.lineTo(MARGIN + GRID_W * CELL, MARGIN + y * CELL + 0.5);
+        }
+        ctx.stroke();
+
+        ctx.fillStyle = '#999';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        for (let x = 0; x < GRID_W; x++) ctx.fillText(x, cx(x), MARGIN / 2);
+        for (let y = 0; y < GRID_H; y++) ctx.fillText(y, MARGIN / 2, MARGIN + (y + 0.5) * CELL);
+    }
+
+    function drawCell(p, fill, stroke, dashed) {
+        const [x, y] = cellRect(p);
+        if (fill) {
+            ctx.fillStyle = fill;
+            ctx.fillRect(x + 1, y + 1, CELL - 1, CELL - 1);
+        }
+        if (stroke) {
+            ctx.strokeStyle = stroke;
+            ctx.lineWidth = 2.5;
+            ctx.setLineDash(dashed ? [5, 3] : []);
+            ctx.strokeRect(x + 2.5, y + 2.5, CELL - 4, CELL - 4);
+            ctx.setLineDash([]);
+        }
+    }
+
+    function dot(p, r, color, label, dx, dy) {
+        const X = cx(p.x), Y = MARGIN + (p.y + 0.5) * CELL;
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        ctx.arc(X, Y, r, 0, Math.PI * 2);
+        ctx.fill();
+        if (label) {
+            ctx.font = 'bold 12px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(label, X + dx, Y + dy);
+        }
+    }
+
+    const cy = y => MARGIN + (y + 0.5) * CELL;
+
+    function drawScene() {
+        const step = run.steps[stepIndex];
+        const info = run.info;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // plotted pixels
+        for (let i = 0; i < step.n; i++) {
+            const isNewest = step.type === 'plot' && i === step.n - 1;
+            drawCell(run.pixels[i], isNewest ? '#2e7d32' : '#66bb6a');
+        }
+
+        // candidates for the current decision
+        if (step.geo && (step.type === 'advance' || step.type === 'decide')) {
+            const g = step.geo;
+            const showDiag = info.dMin > 0;
+            if (step.type === 'decide') {
+                drawCell(step.diag ? g.cand.diag : g.cand.stay, step.diag ? 'rgba(239,108,0,0.25)' : 'rgba(30,136,229,0.25)');
+            }
+            drawCell(g.cand.stay, null, '#1e88e5', true);
+            if (showDiag) drawCell(g.cand.diag, null, '#ef6c00', true);
+        }
+
+        drawGrid();
+
+        // the ideal (real) line through pixel centers
+        ctx.strokeStyle = 'rgba(211,47,47,0.85)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(cx(A.x), cy(A.y));
+        ctx.lineTo(cx(B.x), cy(B.y));
+        ctx.stroke();
+
+        // midpoint M, real point T and the "error" between them
+        if (step.geo && (step.type === 'advance' || step.type === 'decide')) {
+            const g = step.geo;
+            const Mx = cx(g.M.x), My = cy(g.M.y), Tx = cx(g.T.x), Ty = cy(g.T.y);
+            const beyond = (step.type === 'decide' ? step.pBefore : step.p) >= 0;
+            ctx.strokeStyle = beyond ? '#ef6c00' : '#1e88e5';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(Mx, My);
+            ctx.lineTo(Tx, Ty);
+            ctx.stroke();
+
+            // M and T lie on the same column (flat) / row (steep): put labels on opposite sides
+            if (info.steep) {
+                dot(g.M, 4.5, '#222', 'M', 0, -12);
+                dot(g.T, 4.5, '#d32f2f', 'T', 0, 12);
+            } else {
+                dot(g.M, 4.5, '#222', 'M', -12, 0);
+                dot(g.T, 4.5, '#d32f2f', 'T', 12, 0);
+            }
+        }
+
+        // current position cursor
+        if (step.type !== 'done') {
+            const [x, y] = cellRect(step.pos);
+            ctx.strokeStyle = '#222';
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(x - 1.5, y - 1.5, CELL + 3, CELL + 3);
+        }
+
+        // endpoints
+        endpointLabel(A, 'A');
+        endpointLabel(B, 'B');
+    }
+
+    function endpointLabel(p, name) {
+        ctx.fillStyle = '#d32f2f';
+        ctx.beginPath();
+        ctx.arc(cx(p.x), cy(p.y), 3.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'bottom';
+        ctx.fillStyle = '#b71c1c';
+        ctx.fillText(name, px(p.x) + CELL - 6, MARGIN + p.y * CELL + 4);
+    }
+
+    // =====================================================================
+    // ===== TEXT PANELS ===================================================
+    // =====================================================================
+
+    const fmtP = p => `[${p.x}, ${p.y}]`;
+    const sgn = v => v >= 0 ? `+${v}` : `${v}`;
+    const e3 = v => (Math.round(v * 1000) / 1000).toString();
+
+    function renderCode(step) {
+        const info = run.info;
+        const lines = !info.general ? CODE_LECTURE : (info.steep ? CODE_STEEP : CODE_FLAT);
+        document.getElementById('code').innerHTML = lines.map((l, i) =>
+            `<span class="ln${step.lines.includes(i) ? ' active' : ''}"><span class="no">${i + 1}</span>${l}</span>`
+        ).join('');
+
+        const mode = document.getElementById('mode');
+        if (!info.general) {
+            mode.className = 'mode lecture';
+            mode.innerHTML = '1. oktant (0 ≤ dy ≤ dx) – přesně pseudokód z přednášky.';
+        } else {
+            const why = [];
+            if (info.steep) why.push('strmá úsečka |dy| &gt; |dx| → hlavní osa je <b>y</b>');
+            if (info.sx < 0) why.push('jde doleva (sx = −1)');
+            if (info.sy < 0) why.push('jde nahoru (sy = −1)');
+            mode.className = 'mode general';
+            mode.innerHTML = `Mimo 1. oktant: ${why.join(', ')}. Zobrazena zobecněná verze, <mark class="chg">změny</mark> oproti přednášce zvýrazněny.`;
+        }
+    }
+
+    function stepVars(step) {
+        const pos = step.pos;
+        return {x: pos.x, y: pos.y, p: step.p};
+    }
+
+    function renderVars(step) {
+        const info = run.info;
+        const prev = stepIndex > 0 ? stepVars(run.steps[stepIndex - 1]) : null;
+        const cur = stepVars(step);
+        const items = [
+            ['dx', info.dx], ['dy', info.dy], ['p', cur.p],
+            ['d1', info.d1], ['d2', info.d2], ['krok', `${step.k} / ${info.dMaj}`],
+            ['x', cur.x], ['y', cur.y], ['pixelů', step.n]
+        ];
+        if (info.general) items.push(['sx', info.sx], ['sy', info.sy], ['hlavní', info.majName]);
+        document.getElementById('vars').innerHTML = items.map(([n, v]) => {
+            const changed = prev && step.type !== 'init' && ['x', 'y', 'p'].includes(n) && prev[n] !== cur[n];
+            return `<div class="var${changed ? ' changed' : ''}"><b>${n}</b><span>${v}</span></div>`;
+        }).join('');
+    }
+
+    function renderHist(step) {
+        const rows = run.hist.filter(h =>
+            h.k < step.k || (h.k === step.k && (step.type === 'plot' || step.type === 'done')));
+        document.getElementById('hist').innerHTML = rows.map(h => {
+            const choice = h.choice === 'start' ? 'start (A)'
+                : h.choice === 'stay' ? '<span class="stay">zůstat (+d1)</span>'
+                : '<span class="diag">diag. (+d2)</span>';
+            const cur = h.k === step.k && step.type === 'plot' ? ' class="cur"' : '';
+            return `<tr${cur} data-k="${h.k}"><td>${h.k}</td><td>${h.pBefore === null ? '–' : h.pBefore}</td>` +
+                   `<td>${choice}</td><td>${h.p}</td><td>${fmtP(h.pixel)}</td></tr>`;
+        }).join('');
+        const curRow = document.querySelector('#hist tr.cur');
+        if (curRow) curRow.scrollIntoView({block: 'nearest'});
+    }
+
+    function explain(step) {
+        const I = run.info;
+        const {majName: ma, minName: mi, nMaj, nMin} = I;
+        const axisLine = I.steep ? 'řádek' : 'sloupec';
+        const minDir = I.sMin < 0 ? '− 1' : '+ 1';
+
+        switch (step.type) {
+            case 'init': {
+                let s = '';
+                if (!I.general) {
+                    s += `<p><b>Inicializace.</b> dx = x2 − x1 = ${I.dx}, dy = y2 − y1 = ${I.dy}. Platí 0 ≤ dy ≤ dx, úsečka je tedy „spíš vodorovná“: ` +
+                         `v každém kroku se <b>x zvětší o 1</b> a y buď zůstane, nebo se zvětší o 1 – nikdy o víc, protože sklon k = dy/dx = ${e3(I.dy / (I.dx || 1))} ≤ 1.</p>`;
+                } else {
+                    s += `<p><b>Inicializace.</b> |dx| = ${I.adx}, |dy| = ${I.ady}, směry sx = ${I.sx}, sy = ${I.sy}. ` +
+                         (I.steep
+                            ? `Protože |dy| &gt; |dx|, je úsečka strmá – <b>hlavní osou je y</b> (posun v každém kroku) a x se posune jen někdy. Ve vzorcích se proto dx a dy prohodí.`
+                            : `Úsečka je plochá (|dy| ≤ |dx|), hlavní osou zůstává x, jen kroky mají znaménko sx / sy.`) + `</p>`;
+                }
+                s += `<p><span class="pill">p = 2·${nMin} − ${nMaj} = ${step.p}</span> je rozhodovací proměnná pro první krok: říká, zda skutečná úsečka v dalším ${axisLine === 'řádek' ? 'řádku' : 'sloupci'} ` +
+                     `projde před, nebo za středem mezi dvěma kandidáty. p/(2·${nMaj}) = ${I.dMaj ? e3(step.p / (2 * I.dMaj)) : '–'} je přímo tato vzdálenost v pixelech – ` +
+                     `vynásobením 2·${nMaj} se zbavíme zlomků.</p>`;
+                s += `<p><span class="pill">d1 = ${I.d1}</span> a <span class="pill">d2 = ${I.d2}</span> jsou předpočítané přírůstky p: ` +
+                     `d1 když ${mi} zůstane, d2 když se ${mi} posune. Ve smyčce už se pak <b>jen sčítá</b>.</p>`;
+                return s;
+            }
+            case 'plot': {
+                if (step.k === 0) {
+                    return `<p><b>setPixel(${step.pos.x}, ${step.pos.y})</b> – první pixel je vždy počáteční bod A.</p>` +
+                           `<p>Celkem nakreslíme ${I.dMaj} + 1 = ${I.dMaj + 1} pixelů: jeden pro každou hodnotu ${ma} od ${ma}1 do ${ma}2. ` +
+                           `Proto úsečka nebude mít díry ani zdvojené pixely.</p>`;
+                }
+                return `<p><b>setPixel(${step.pos.x}, ${step.pos.y})</b> – ${step.n}. pixel z ${I.dMaj + 1}.</p>` +
+                       (step.last ? `<p>To je koncový bod B. Při další kontrole podmínky <code>while</code> smyčka skončí.</p>` : '');
+            }
+            case 'advance': {
+                const g = step.geo;
+                const cond = I.general ? '!=' : '&lt;';
+                let s = `<p><b>Podmínka</b> <code>while (${ma} ${cond} ${ma}2)</code> platí, takže se posuneme po hlavní ose: ` +
+                        `<span class="pill">${ma} = ${ma === 'x' ? step.pos.x : step.pos.y}</span>.</p>`;
+                if (I.dMin === 0) {
+                    return s + `<p>Protože ${nMin} = 0, je úsečka přímá a ${mi} se nikdy nezmění – p bude vždy záporné.</p>`;
+                }
+                const tMin = I.steep ? g.T.x : g.T.y;
+                const mMin = I.steep ? g.M.x : g.M.y;
+                s += `<p>Další pixel může být jen jeden ze dvou kandidátů: <span class="stay">${fmtP(g.cand.stay)}</span> (${mi} zůstane) ` +
+                     `nebo <span class="diag">${fmtP(g.cand.diag)}</span> (${mi} ${minDir}). Mezi nimi leží střed <b>M</b> (${mi} = ${e3(mMin)}). ` +
+                     `Skutečná úsečka protíná tento ${axisLine} v bodě <b style="color:#d32f2f">T</b> (${mi} = ${e3(tMin)}).</p>` +
+                     `<p>Leží-li T <b>před</b> středem M, je blíž modrý kandidát, jinak oranžový. Přesně tohle říká znaménko p = ${step.p} – a to bez jediného desetinného čísla.</p>`;
+                return s;
+            }
+            case 'decide': {
+                const g = step.geo;
+                const e = I.dMaj ? step.pBefore / (2 * I.dMaj) : 0;
+                if (!step.diag) {
+                    return `<p><b>p = ${step.pBefore} &lt; 0</b> → T leží <b>před</b> středem M (o ${e3(Math.abs(e))} px), ` +
+                           `bližší je <span class="stay">${fmtP(g.cand.stay)}</span>. ${mi} se nemění.</p>` +
+                           `<p><span class="pill">p = p + d1 = ${step.pBefore} ${sgn(I.d1)} = ${step.p}</span></p>` +
+                           `<p><i>Proč + d1?</i> Posunuli jsme se o 1 po hlavní ose a úsečka se mezitím vzdálila o sklon ` +
+                           `${nMin}/${nMaj} = ${e3(I.dMin / I.dMaj)} px. Vynásobeno 2·${nMaj} to dává přesně 2·${nMin} = d1.</p>`;
+                }
+                const tie = step.pBefore === 0
+                    ? `<p class="note"><b>Remíza:</b> p = 0 znamená, že úsečka jde přesně středem M a oba pixely jsou stejně daleko. ` +
+                      `Podmínka <code>p &lt; 0</code> neplatí, takže pseudokód remízu posílá do diagonály.</p>` : '';
+                return `<p><b>p = ${step.pBefore} ≥ 0</b> → T leží <b>za</b> středem M${step.pBefore === 0 ? ' (přesně na něm)' : ` (o ${e3(e)} px)`}, ` +
+                       `bližší je <span class="diag">${fmtP(g.cand.diag)}</span>. Posuneme i ${mi}: <span class="pill">${mi} = ${mi} ${minDir}</span>.</p>` +
+                       `<p><span class="pill">p = p + d2 = ${step.pBefore} ${sgn(I.d2)} = ${step.p}</span></p>` +
+                       `<p><i>Proč d2 = 2·(${nMin} − ${nMaj})?</i> Za posun po hlavní ose přičteme 2·${nMin} jako vždy. ` +
+                       `Navíc jsme ale posunuli ${mi} o celý pixel, takže se úsečka vůči novému středu „přiblížila“ o 1 px → odečteme 2·${nMaj}.</p>` + tie;
+            }
+            case 'done':
+                return `<p><b>Hotovo.</b> Podmínka <code>while</code> už neplatí (${ma} = ${ma}2), algoritmus končí.</p>` +
+                       `<p>Vykresleno ${I.dMaj + 1} pixelů – v každém ${I.steep ? 'řádku' : 'sloupci'} přesně jeden. ` +
+                       `Ve smyčce jsme použili jen <b>sčítání celých čísel a porovnání s nulou</b>. ` +
+                       `Triviální algoritmus by v každém kroku počítal <code>k·x + q</code> ve floatu a volal <code>Math.round</code> – a dal by (mimo remízy) stejné pixely.</p>`;
+        }
+    }
+
+    // =====================================================================
+    // ===== CONTROLLER / UI ===============================================
+    // =====================================================================
+
+    let stepIndex = 0;
+    let timer = null;
+
+    function render() {
+        const step = run.steps[stepIndex];
+        drawScene();
+        renderCode(step);
+        renderVars(step);
+        renderHist(step);
+        document.getElementById('explain').innerHTML = explain(step);
+        document.getElementById('stepinfo').textContent = `Krok ${stepIndex + 1} / ${run.steps.length}`;
+        syncInputs();
+    }
+
+    function rebuild(keepAtStart) {
+        run = generateSteps(A, B);
+        stepIndex = keepAtStart ? 0 : run.steps.length - 1;
+        render();
+    }
+
+    function go(i) {
+        stepIndex = Math.max(0, Math.min(run.steps.length - 1, i));
+        render();
+    }
+
+    function nextPixel() {
+        let i = stepIndex + 1;
+        while (i < run.steps.length - 1 && run.steps[i].type !== 'plot') i++;
+        go(i);
+    }
+
+    function stop() {
+        clearTimeout(timer);
+        timer = null;
+        document.getElementById('btnPlay').textContent = '▶ Přehrát';
+    }
+
+    function play() {
+        if (stepIndex >= run.steps.length - 1) go(0);
+        document.getElementById('btnPlay').textContent = '⏸ Pauza';
+        const tick = () => {
+            if (stepIndex >= run.steps.length - 1) { stop(); return; }
+            go(stepIndex + 1);
+            timer = setTimeout(tick, 1000 / Number(speed.value));
+        };
+        timer = setTimeout(tick, 1000 / Number(speed.value));
+    }
+
+    const speed = document.getElementById('speed');
+    speed.addEventListener('input', () => document.getElementById('speedValue').textContent = speed.value);
+
+    document.getElementById('btnRestart').onclick = () => { stop(); go(0); };
+    document.getElementById('btnBack').onclick = () => { stop(); go(stepIndex - 1); };
+    document.getElementById('btnStep').onclick = () => { stop(); go(stepIndex + 1); };
+    document.getElementById('btnPixel').onclick = () => { stop(); nextPixel(); };
+    document.getElementById('btnPlay').onclick = () => timer ? stop() : play();
+
+    document.getElementById('hist').addEventListener('click', e => {
+        const tr = e.target.closest('tr');
+        if (!tr) return;
+        const k = Number(tr.dataset.k);
+        stop();
+        go(run.steps.findIndex(s => s.type === 'plot' && s.k === k));
+    });
+
+    document.addEventListener('keydown', e => {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+        if (e.key === 'ArrowRight') { stop(); go(stepIndex + 1); }
+        else if (e.key === 'ArrowLeft') { stop(); go(stepIndex - 1); }
+        else if (e.key === 'Enter') { stop(); nextPixel(); }
+        else if (e.key === 'Home') { stop(); go(0); }
+        else if (e.key === ' ') { e.preventDefault(); timer ? stop() : play(); }
+    });
+
+    // --- endpoint inputs -------------------------------------------------
+    const inputs = ['ax', 'ay', 'bx', 'by'].map(id => document.getElementById(id));
+    inputs.forEach((inp, i) => {
+        inp.min = 0;
+        inp.max = i % 2 === 0 ? GRID_W - 1 : GRID_H - 1;
+        inp.addEventListener('change', () => {
+            const v = inputs.map(x => Math.round(Number(x.value) || 0));
+            A = {x: clamp(v[0], 0, GRID_W - 1), y: clamp(v[1], 0, GRID_H - 1)};
+            B = {x: clamp(v[2], 0, GRID_W - 1), y: clamp(v[3], 0, GRID_H - 1)};
+            stop();
+            rebuild(true);
+        });
+    });
+
+    function syncInputs() {
+        [A.x, A.y, B.x, B.y].forEach((v, i) => { if (document.activeElement !== inputs[i]) inputs[i].value = v; });
+    }
+
+    document.getElementById('preset').addEventListener('change', e => {
+        if (!e.target.value) return;
+        const [ax, ay, bx, by] = e.target.value.split(',').map(Number);
+        A = {x: ax, y: ay};
+        B = {x: bx, y: by};
+        stop();
+        rebuild(true);
+        e.target.value = '';
+    });
+
+    // --- mouse: drag endpoints -------------------------------------------
+    // While dragging the whole result is shown; press Restart to step through it.
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+    let dragging = null;
+
+    function cellAt(e) {
+        const r = canvas.getBoundingClientRect();
+        const mx = (e.clientX - r.left) * canvas.width / r.width;
+        const my = (e.clientY - r.top) * canvas.height / r.height;
+        return {
+            x: clamp(Math.floor((mx - MARGIN) / CELL), 0, GRID_W - 1),
+            y: clamp(Math.floor((my - MARGIN) / CELL), 0, GRID_H - 1)
+        };
+    }
+
+    canvas.addEventListener('mousedown', e => {
+        const p = cellAt(e);
+        stop();
+        if (p.x === A.x && p.y === A.y) dragging = 'A';
+        else if (p.x === B.x && p.y === B.y) dragging = 'B';
+        else dragging = e.shiftKey ? 'A' : 'B';
+        if (dragging === 'A') A = p; else B = p;
+        rebuild(false);
+    });
+
+    window.addEventListener('mousemove', e => {
+        if (!dragging) return;
+        const p = cellAt(e);
+        const old = dragging === 'A' ? A : B;
+        if (p.x === old.x && p.y === old.y) return;
+        if (dragging === 'A') A = p; else B = p;
+        rebuild(false);
+    });
+
+    window.addEventListener('mouseup', () => {
+        if (dragging) { dragging = null; go(0); }
+    });
+
+    rebuild(true);
+</script>
+</body>
+</html>
