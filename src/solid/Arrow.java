@@ -7,13 +7,12 @@ import java.util.ArrayList;
 public class Arrow extends Solid{
 
     public Arrow(){
-        //todo: naplnit vb bude model space od -1 do 1
         //zatím nemáme celou pipeline proto to musíme zadat souřadnicích okna
-        vb.add(new Point3D(200, 200, 0)); //v0
-        vb.add(new Point3D(300, 200, 0)); //v1
-        vb.add(new Point3D(300, 250, 0)); //v2
-        vb.add(new Point3D(350, 200, 0)); //v3
-        vb.add(new Point3D(300, 150, 0)); //v4
+        vb.add(new Point3D(0, 0, 0)); //v0
+        vb.add(new Point3D(0.8, 0, 0)); //v1
+        vb.add(new Point3D(0.8, -0.2, 0)); //v2
+        vb.add(new Point3D(1, 0, 0)); //v3
+        vb.add(new Point3D(0.8, 0.2, 0)); //v4
 
         //todo: naplnit ib
 //        //v0-v1
